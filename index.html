@@ -265,7 +265,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbyRBp4Fe5iUcfkUxTOhqxmJ
 const ROOM_NAME = "ห้อง229";
 
 // ✏️ [แก้ไข 3] เบอร์ PromptPay ของเหรัญญิก (ใช้สร้าง QR Code)
-const PROMPTPAY_NUMBER = "0814065998";
+const PROMPTPAY_NUMBER = "0812345678";
 
 // ✏️ [แก้ไข 4] ยอดเงินค่าห้องต่อคน (บาท) — ใช้คำนวณยอดรวมที่เก็บได้
 const FEE_PER_PERSON = 150;
@@ -291,7 +291,9 @@ const isMockMode = !API_URL || API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT") || AP
 // =====================================================================
 window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('room-label').textContent = ROOM_NAME;
-    document.getElementById('qr-code-img').src = "qr.png";
+    document.getElementById('qr-code-img').src =
+        `https://promptpay.io/${PROMPTPAY_NUMBER}.png`;
+
     if (ADMIN_PASSWORD) {
         document.getElementById('btn-admin-view').addEventListener('click', requireAdminPassword, true);
     }
@@ -543,6 +545,7 @@ async function submitSlip() {
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
+                    redirect: 'follow',
                     body: JSON.stringify({
                         action: 'uploadSlip',
                         rowId: selectedUserRowId,
@@ -608,6 +611,7 @@ async function adminAction(action, rowId, successMsg, mockFn) {
             const res = await fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
+                redirect: 'follow',
                 body: JSON.stringify({ action, rowId })
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
