@@ -47,7 +47,7 @@
         <div class="p-4 flex flex-col items-center gap-3">
             <img id="slip-modal-img" src="" alt="สลิปโอนเงิน"
                 class="max-h-[70vh] w-auto rounded-2xl object-contain border border-pink-100 shadow"
-                onerror="this.src=''; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
+                onerror="this.style.display='none'"; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
             <a id="slip-modal-link" href="#" target="_blank" rel="noopener noreferrer"
                 class="text-xs text-pink-500 underline hover:text-pink-700">เปิดในแท็บใหม่</a>
         </div>
