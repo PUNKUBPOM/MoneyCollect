@@ -291,9 +291,7 @@ const isMockMode = !API_URL || API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT") || AP
 // =====================================================================
 window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('room-label').textContent = ROOM_NAME;
-    document.getElementById('qr-code-img').src =
-        `https://promptpay.io/${PROMPTPAY_NUMBER}.png`;
-
+    document.getElementById('qr-code-img').src = "qr.png";
     if (ADMIN_PASSWORD) {
         document.getElementById('btn-admin-view').addEventListener('click', requireAdminPassword, true);
     }
