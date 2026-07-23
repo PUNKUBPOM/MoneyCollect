@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเก็บเงินห้อง - ClassFund</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .transition-all { transition: all 0.25s ease; }
+        #slip-modal { backdrop-filter: blur(4px); }
+        .slip-img-zoom { cursor: zoom-in; transition: transform 0.2s; }
+        .slip-img-zoom:active { transform: scale(0.97); }
+        #loading-overlay { backdrop-filter: blur(2px); }
+        input[type="file"]::file-selector-button {
+            background: #fce7f3; color: #be185d;
+            border: none; border-radius: 12px;
+            padding: 6px 14px; font-size: 12px;
+            font-family: 'Prompt', sans-serif;
+            font-weight: 600; cursor: pointer;
+            transition: background 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover { background: #fbcfe8; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 8px; }
+        .fade-in { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @media print { header, footer, button, #user-view { display: none; } }
+    </style>
+</head>
+<body class="bg-pink-50 min-h-screen text-gray-800 flex flex-col">
+
+<!-- ========== LOADING OVERLAY ========== -->
+<div id="loading-overlay" class="fixed inset-0 bg-white/80 z-[999] flex flex-col items-center justify-center hidden">
+    <div class="w-12 h-12 rounded-full border-4 border-pink-200 border-t-pink-500 animate-spin mb-3"></div>
+    <p class="text-sm text-pink-600 font-medium">กำลังโหลดข้อมูล...</p>
+</div>
+
+<!-- ========== SLIP IMAGE MODAL ========== -->
+<div id="slip-modal" class="fixed inset-0 bg-black/60 z-[998] hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden fade-in">
+        <div class="flex justify-between items-center px-5 py-3 border-b border-gray-100">
+            <p class="font-bold text-gray-800 text-sm">🖼️ หลักฐานการโอนเงิน</p>
+            <button onclick="closeSlipModal()" class="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none">✕</button>
+        </div>
+        <div class="p-4 flex flex-col items-center gap-3">
+            <img id="slip-modal-img" src="" alt="สลิปโอนเงิน"
+                class="max-h-[70vh] w-auto rounded-2xl object-contain border border-pink-100 shadow"
+                onerror="this.src=''; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
+            <a id="slip-modal-link" href="#" target="_blank" rel="noopener noreferrer"
+                class="text-xs text-pink-500 underline hover:text-pink-700">เปิดในแท็บใหม่</a>
+        </div>
+    </div>
+</div>
+
+<!-- ========== TOAST NOTIFICATION ========== -->
+<div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[997] hidden">
+    <div id="toast-inner" class="px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold text-white flex items-center gap-2"></div>
+</div>
+
+<!-- ========== HEADER ========== -->
+<header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+            <span class="text-2xl">💖</span>
+            <div>
+                <!-- ✏️ [แก้ไข] เปลี่ยนชื่อระบบ/ห้องของคุณได้ที่นี่ -->
+                <span class="text-xl font-bold text-pink-600 tracking-tight">ClassFund</span>
+                <span id="room-label" class="text-xs text-gray-400 ml-1">ม.3/1</span>
+            </div>
+        </div>
+        <div class="bg-pink-100 p-1 rounded-full flex space-x-1 text-sm font-medium">
+            <button id="btn-user-view" onclick="switchView('user')"
+                class="px-4 py-1.5 rounded-full bg-pink-500 text-white shadow-sm transition">นักเรียน</button>
+            <button id="btn-admin-view" onclick="switchView('admin')"
+                class="px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition">เหรัญญิก (Admin)</button>
+        </div>
+    </div>
+</header>
+
+<main class="max-w-4xl mx-auto px-4 py-6 w-full flex-grow">
+
+    <!-- ==================== USER VIEW ==================== -->
+    <section id="user-view" class="block space-y-6">
+
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-pink-100 max-w-md mx-auto">
+            <label class="block text-xs font-semibold text-gray-500 mb-1">เลือกชื่อนักเรียน</label>
+            <select id="user-select" onchange="loadUserProfile()"
+                class="w-full bg-pink-50 border border-pink-200 text-gray-700 text-sm rounded-xl p-2.5 focus:ring-2 focus:ring-pink-300 focus:border-pink-400 outline-none">
+            </select>
+        </div>
+
+        <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-lg border-t-4 border-pink-400 max-w-md mx-auto text-center fade-in">
+            <div class="w-20 h-20 bg-pink-100 text-pink-500 rounded-full mx-auto flex items-center justify-center text-4xl mb-3 shadow-inner">
+                🧑‍🎓
+            </div>
+            <h2 id="user-display-name" class="text-2xl font-bold text-gray-800">กำลังโหลด...</h2>
+            <p id="user-display-no" class="text-sm text-gray-500">เลขที่ -</p>
+
+            <div class="mt-6 p-5 bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl border border-pink-200">
+                <p class="text-xs font-medium text-pink-600 uppercase tracking-wider mb-1">ยอดค้างชำระ</p>
+                <p class="text-4xl font-extrabold text-pink-600">
+                    <span id="user-display-amount">0</span>
+                    <span class="text-lg font-normal text-gray-600"> บาท</span>
+                </p>
+                <div id="user-status-badge" class="mt-2 inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">-</div>
+            </div>
+
+            <button id="btn-pay-action" onclick="togglePaymentSection()"
+                class="mt-6 w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+                <span>💳</span><span>ชำระเงิน / แจ้งโอนเงิน</span>
+            </button>
+
+            <div id="payment-section" class="hidden mt-6 pt-6 border-t border-gray-100 text-left">
+                <div class="text-center mb-4">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">สแกน PromptPay QR Code</p>
+                    <div class="inline-block p-3 bg-white border-2 border-pink-200 rounded-2xl shadow-sm">
+                        <!-- ✏️ [แก้ไข] เปลี่ยนเบอร์ PromptPay ในลิงก์ด้านล่าง (แทนที่ 0812345678 ด้วยเบอร์ของเหรัญญิก) -->
+                        <img id="qr-code-img"
+                            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=0812345678"
+                            alt="PromptPay QR Code" class="w-44 h-44 mx-auto rounded-lg"
+                            onerror="this.alt='ไม่สามารถโหลด QR ได้'">
+                    </div>
+                    <!-- ✏️ [แก้ไข] เปลี่ยนชื่อบัญชีตามจริง -->
+                    <p class="text-xs text-gray-400 mt-1">ชื่อบัญชี: บัญชีเงินกองกลางห้อง ม.3/1</p>
+                </div>
+
+                <div class="space-y-3">
+                    <label class="block text-xs font-semibold text-gray-700">แนบสลิปหลักฐานการโอนเงิน</label>
+                    <input type="file" id="slip-file-input" accept="image/jpeg,image/png,image/webp"
+                        class="block w-full text-xs text-gray-500 cursor-pointer">
+                    <p id="file-size-warn" class="text-xs text-rose-500 hidden">⚠️ ไฟล์ใหญ่เกิน 5MB กรุณาเลือกรูปที่เล็กกว่า</p>
+                    <button onclick="submitSlip()" id="btn-submit-slip"
+                        class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow transition text-sm flex items-center justify-center gap-1">
+                        <span>📤</span><span>ยืนยันการส่งหลักฐาน</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== ADMIN VIEW ==================== -->
+    <section id="admin-view" class="hidden space-y-6">
+
+        <!-- Admin Header -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">แดชบอร์ดเหรัญญิก 📊</h2>
+                <p class="text-xs text-gray-500">ตรวจสอบและอนุมัติสลิปการชำระเงิน</p>
+            </div>
+            <button onclick="refreshData()"
+                class="bg-white border border-pink-200 text-pink-600 text-xs px-3 py-2 rounded-xl hover:bg-pink-50 transition flex items-center gap-1">
+                <span>🔄</span><span>รีเฟรชข้อมูล</span>
+            </button>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-pink-500">
+                <p class="text-xs text-gray-500 font-medium">ยอดเก็บได้แล้ว</p>
+                <p class="text-2xl font-bold text-gray-800 mt-1"><span id="stat-total-collected">0</span> <span class="text-xs font-normal">฿</span></p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-emerald-500">
+                <p class="text-xs text-gray-500 font-medium">จ่ายครบแล้ว</p>
+                <p class="text-2xl font-bold text-emerald-600 mt-1"><span id="stat-paid-count">0</span> <span class="text-xs font-normal">คน</span></p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-amber-500">
+                <p class="text-xs text-gray-500 font-medium">รอตรวจสอบ</p>
+                <p class="text-2xl font-bold text-amber-500 mt-1"><span id="stat-pending-count">0</span> <span class="text-xs font-normal">คน</span></p>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-rose-500">
+                <p class="text-xs text-gray-500 font-medium">ยังไม่จ่าย</p>
+                <p class="text-2xl font-bold text-rose-500 mt-1"><span id="stat-unpaid-count">0</span> <span class="text-xs font-normal">คน</span></p>
+            </div>
+        </div>
+
+        <!-- Pending Review Table -->
+        <div class="bg-white rounded-3xl shadow-sm border border-pink-100 overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center bg-pink-50/50">
+                <h3 class="font-bold text-gray-800 text-sm sm:text-base flex items-center gap-2">
+                    <span>🔎</span><span>รายการรอตรวจสอบสลิป</span>
+                </h3>
+                <span id="pending-badge" class="bg-amber-100 text-amber-700 text-xs px-2.5 py-0.5 rounded-full font-semibold">0 รายการ</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead class="bg-gray-50 text-gray-600 border-b border-gray-100">
+                        <tr>
+                            <th class="p-3 sm:p-4 font-semibold">เลขที่</th>
+                            <th class="p-3 sm:p-4 font-semibold">ชื่อ-นามสกุล</th>
+                            <th class="p-3 sm:p-4 font-semibold">ยอดโอน</th>
+                            <th class="p-3 sm:p-4 font-semibold">สลิป</th>
+                            <th class="p-3 sm:p-4 font-semibold text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-table-body" class="divide-y divide-gray-50"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- All Students Table with Search + Filter -->
+        <div class="bg-white rounded-3xl shadow-sm border border-pink-100 overflow-hidden">
+            <div class="p-4 sm:p-5 border-b border-gray-100 bg-white">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h3 class="font-bold text-gray-800 text-sm sm:text-base flex items-center gap-2">
+                        <span>📋</span><span>รายชื่อนักเรียนทั้งหมด</span>
+                    </h3>
+                    <div class="flex gap-2 flex-wrap">
+                        <!-- Search Bar -->
+                        <div class="relative">
+                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">🔍</span>
+                            <input type="text" id="search-input" placeholder="ค้นหาชื่อ / เลขที่..."
+                                oninput="filterStudentTable()"
+                                class="pl-7 pr-3 py-1.5 text-xs border border-pink-200 rounded-xl bg-pink-50 focus:ring-2 focus:ring-pink-300 focus:border-pink-400 outline-none w-40 sm:w-48">
+                        </div>
+                        <!-- Status Filter -->
+                        <select id="status-filter" onchange="filterStudentTable()"
+                            class="text-xs border border-pink-200 bg-pink-50 rounded-xl px-3 py-1.5 focus:ring-2 focus:ring-pink-300 outline-none text-gray-700">
+                            <option value="">ทุกสถานะ</option>
+                            <option value="จ่ายแล้ว">✅ จ่ายแล้ว</option>
+                            <option value="รอตรวจสอบ">⏳ รอตรวจสอบ</option>
+                            <option value="ยังไม่จ่าย">⚠️ ยังไม่จ่าย</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm">
+                    <thead class="bg-gray-50 text-gray-600 border-b border-gray-100">
+                        <tr>
+                            <th class="p-3 sm:p-4 font-semibold">เลขที่</th>
+                            <th class="p-3 sm:p-4 font-semibold">ชื่อ-นามสกุล</th>
+                            <th class="p-3 sm:p-4 font-semibold">ค้างชำระ</th>
+                            <th class="p-3 sm:p-4 font-semibold">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-students-table-body" class="divide-y divide-gray-50"></tbody>
+                </table>
+            </div>
+            <div class="px-4 py-2 border-t border-gray-50 text-right">
+                <span id="table-count" class="text-xs text-gray-400"></span>
+            </div>
+        </div>
+
+    </section>
+</main>
+
+<footer class="text-center py-4 text-xs text-gray-400 bg-white border-t border-gray-100 mt-4">
+    ClassFund System &copy; 2026 — ระบบเก็บเงินห้องเรียน
+</footer>
+
+<script>
+// =====================================================================
+// ⚙️ CONFIGURATION — แก้ไขค่าเหล่านี้ก่อนใช้งานจริง
+// =====================================================================
+
+// ✏️ [แก้ไข 1] วาง URL ของ Google Apps Script ที่ Deploy แล้วที่นี่
+// วิธี Deploy: Apps Script → Deploy → New Deployment → Web App
+// Execute as: Me | Who has access: Anyone
+// ตัวอย่าง: "https://script.google.com/macros/s/AKfycbx.../exec"
+const API_URL = "https://script.google.com/macros/s/AKfycbyRBp4Fe5iUcfkUxTOhqxmJnR7mA1vMQcFzzdTNEBPL02QfzX5UG7IWm8ixLN-ogErGXQ/exec";
+
+// ✏️ [แก้ไข 2] ชื่อห้องเรียน (แสดงในหัวเว็บ)
+const ROOM_NAME = "ห้อง229";
+
+// ✏️ [แก้ไข 3] เบอร์ PromptPay ของเหรัญญิก (ใช้สร้าง QR Code)
+const PROMPTPAY_NUMBER = "0814065998";
+
+// ✏️ [แก้ไข 4] ยอดเงินค่าห้องต่อคน (บาท) — ใช้คำนวณยอดรวมที่เก็บได้
+const FEE_PER_PERSON = 150;
+
+// ✏️ [แก้ไข 5] Admin Password (ป้องกัน tab เหรัญญิก) — ถ้าไม่ต้องการก็ตั้งเป็น ""
+const ADMIN_PASSWORD = "Nowaybro";
+
+// =====================================================================
+// MOCK DATA — ข้อมูลตัวอย่างสำหรับทดสอบ (ลบออกหรือเว้นว่างเมื่อต่อ API แล้ว)
+// ✏️ [แก้ไข 6] ใส่รายชื่อนักเรียนจริงของห้องที่นี่ (ก่อน API พร้อม)
+// =====================================================================
+
+// =====================================================================
+// APP STATE
+// =====================================================================
+let studentsData = [];
+let selectedUserRowId = null;
+const MAX_FILE_SIZE_MB = 5;
+const isMockMode = !API_URL || API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT") || API_URL.trim() === "";
+
+// =====================================================================
+// INIT
+// =====================================================================
+window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('room-label').textContent = ROOM_NAME;
+    document.getElementById('qr-code-img').src = "qr.png";
+    if (ADMIN_PASSWORD) {
+        document.getElementById('btn-admin-view').addEventListener('click', requireAdminPassword, true);
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('slip-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeSlipModal();
+    });
+
+    initApp();
+});
+
+async function initApp() {
+    if (isMockMode) {
+        renderAll();
+        return;
+    }
+    await refreshData();
+}
+
+// =====================================================================
+// DATA FETCH
+// =====================================================================
+async function refreshData() {
+    if (isMockMode) { renderAll(); return; }
+    showLoading(true);
+    try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(API_URL, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!Array.isArray(data)) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
+
+        studentsData = data.map(s => ({
+            rowId:     Number(s.rowId)     || 0,
+            no:        s.no                || '-',
+            name:      sanitizeText(s.name || ''),
+            amountDue: Number(s.amountDue) || 0,
+            status:    ['จ่ายแล้ว','รอตรวจสอบ','ยังไม่จ่าย'].includes(s.status)
+                       ? s.status : 'ยังไม่จ่าย',
+            proofUrl:  isValidUrl(s.proofUrl) ? s.proofUrl : ''
+        }));
+        renderAll();
+    } catch (err) {
+        const msg = err.name === 'AbortError'
+            ? 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่'
+            : `โหลดข้อมูลไม่สำเร็จ: ${err.message}`;
+        showToast(msg, 'error');
+        renderAll(); // fallback to existing data
+    } finally {
+        showLoading(false);
+    }
+}
+
+// =====================================================================
+// RENDER
+// =====================================================================
+function renderAll() {
+    populateUserDropdown();
+    loadUserProfile();
+    renderAdminDashboard();
+    filterStudentTable();
+}
+
+function populateUserDropdown() {
+    const select = document.getElementById('user-select');
+    const prevVal = select.value;
+    select.innerHTML = '';
+    studentsData.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.rowId;
+        opt.textContent = `เลขที่ ${s.no} — ${s.name}`;
+        select.appendChild(opt);
+    });
+    if (prevVal) select.value = prevVal;
+    if (!select.value && studentsData.length) select.value = studentsData[0].rowId;
+    selectedUserRowId = parseInt(select.value) || null;
+}
+
+function loadUserProfile() {
+    selectedUserRowId = parseInt(document.getElementById('user-select').value) || null;
+    const student = studentsData.find(s => s.rowId === selectedUserRowId) || studentsData[0];
+    if (!student) return;
+
+    document.getElementById('user-display-name').textContent = student.name;
+    document.getElementById('user-display-no').textContent = `เลขที่ ${student.no}`;
+    document.getElementById('user-display-amount').textContent = student.amountDue.toLocaleString();
+
+    const badge  = document.getElementById('user-status-badge');
+    const btnPay = document.getElementById('btn-pay-action');
+    const paySection = document.getElementById('payment-section');
+
+    const statusMap = {
+        'จ่ายแล้ว':    { cls: 'bg-emerald-100 text-emerald-700', label: '✅ ชำระเงินเรียบร้อยแล้ว', showBtn: false },
+        'รอตรวจสอบ':  { cls: 'bg-amber-100 text-amber-700',   label: '⏳ รอเหรัญญิกตรวจสอบสลิป', showBtn: true  },
+        'ยังไม่จ่าย': { cls: 'bg-rose-100 text-rose-700',     label: '⚠️ ยังไม่ได้ชำระเงิน',       showBtn: true  },
+    };
+    const s = statusMap[student.status] || statusMap['ยังไม่จ่าย'];
+    badge.className = `mt-2 inline-block px-3 py-1 rounded-full text-xs font-semibold ${s.cls}`;
+    badge.textContent = s.label;
+    btnPay.classList.toggle('hidden', !s.showBtn);
+    if (!s.showBtn) paySection.classList.add('hidden');
+}
+
+function renderAdminDashboard() {
+    const paid    = studentsData.filter(s => s.status === 'จ่ายแล้ว');
+    const pending = studentsData.filter(s => s.status === 'รอตรวจสอบ');
+    const unpaid  = studentsData.filter(s => s.status === 'ยังไม่จ่าย');
+    const collected = paid.length * FEE_PER_PERSON;
+
+    document.getElementById('stat-total-collected').textContent = collected.toLocaleString();
+    document.getElementById('stat-paid-count').textContent      = paid.length;
+    document.getElementById('stat-pending-count').textContent   = pending.length;
+    document.getElementById('stat-unpaid-count').textContent    = unpaid.length;
+    document.getElementById('pending-badge').textContent        = `${pending.length} รายการ`;
+
+    // Pending table
+    const tbody = document.getElementById('pending-table-body');
+    tbody.innerHTML = '';
+    if (pending.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-gray-400 text-sm">🎉 ไม่มีรายการรอตรวจสอบ</td></tr>`;
+    } else {
+        pending.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-pink-50/30 transition fade-in';
+            tr.innerHTML = `
+                <td class="p-3 sm:p-4 font-medium text-gray-700">${escapeHtml(String(s.no))}</td>
+                <td class="p-3 sm:p-4 font-semibold text-gray-800">${escapeHtml(s.name)}</td>
+                <td class="p-3 sm:p-4 text-pink-600 font-bold">${s.amountDue.toLocaleString()} ฿</td>
+                <td class="p-3 sm:p-4">
+                    ${s.proofUrl
+                        ? `<button onclick="openSlipModal('${encodeURIComponent(s.proofUrl)}')"
+                                class="inline-flex items-center gap-1 text-pink-600 font-medium hover:text-pink-800 underline text-xs">
+                                🖼️ ดูสลิป
+                           </button>`
+                        : '<span class="text-gray-400 text-xs">ไม่มีรูป</span>'}
+                </td>
+                <td class="p-3 sm:p-4 text-center space-x-1">
+                    <button onclick="approvePayment(${s.rowId})"
+                        class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-3 py-1 rounded-xl transition text-xs">
+                        ✅ อนุมัติ
+                    </button>
+                    <button onclick="rejectPayment(${s.rowId})"
+                        class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium px-3 py-1 rounded-xl transition text-xs">
+                        ❌ ปฏิเสธ
+                    </button>
+                </td>`;
+            tbody.appendChild(tr);
+        });
+    }
+}
+
+// =====================================================================
+// SEARCH + FILTER
+// =====================================================================
+function filterStudentTable() {
+    const query  = document.getElementById('search-input').value.trim().toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    const tbody  = document.getElementById('all-students-table-body');
+    tbody.innerHTML = '';
+
+    const filtered = studentsData.filter(s => {
+        const matchText = !query ||
+            String(s.no).includes(query) ||
+            s.name.toLowerCase().includes(query);
+        const matchStatus = !status || s.status === status;
+        return matchText && matchStatus;
+    });
+
+    document.getElementById('table-count').textContent =
+        `แสดง ${filtered.length} จาก ${studentsData.length} คน`;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-400 text-sm">ไม่พบรายการที่ค้นหา</td></tr>`;
+        return;
+    }
+
+    const statusConfig = {
+        'จ่ายแล้ว':    'bg-emerald-100 text-emerald-700',
+        'รอตรวจสอบ':  'bg-amber-100 text-amber-700',
+        'ยังไม่จ่าย': 'bg-rose-100 text-rose-700',
+    };
+
+    filtered.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-pink-50/20 transition';
+        const badgeCls = statusConfig[s.status] || 'bg-gray-100 text-gray-600';
+        tr.innerHTML = `
+            <td class="p-3 sm:p-4 text-gray-600">${escapeHtml(String(s.no))}</td>
+            <td class="p-3 sm:p-4 font-medium text-gray-800">${escapeHtml(s.name)}</td>
+            <td class="p-3 sm:p-4 font-semibold ${s.amountDue > 0 ? 'text-rose-600' : 'text-gray-400'}">
+                ${s.amountDue.toLocaleString()} ฿
+            </td>
+            <td class="p-3 sm:p-4">
+                <span class="px-2.5 py-0.5 rounded-full font-semibold text-xs ${badgeCls}">${escapeHtml(s.status)}</span>
+            </td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// =====================================================================
+// PAYMENT — SUBMIT SLIP
+// =====================================================================
+function togglePaymentSection() {
+    document.getElementById('payment-section').classList.toggle('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('slip-file-input');
+    if (fileInput) {
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            const warn = document.getElementById('file-size-warn');
+            warn.classList.toggle('hidden', !file || file.size <= MAX_FILE_SIZE_MB * 1024 * 1024);
+        });
+    }
+});
+
+async function submitSlip() {
+    if (!selectedUserRowId) { showToast('กรุณาเลือกชื่อนักเรียนก่อน', 'error'); return; }
+
+    const fileInput = document.getElementById('slip-file-input');
+    const file = fileInput.files[0];
+    if (!file) { showToast('กรุณาเลือกไฟล์สลิปก่อน', 'error'); return; }
+
+    const allowed = ['image/jpeg','image/png','image/webp'];
+    if (!allowed.includes(file.type)) { showToast('รองรับเฉพาะ JPG, PNG, WEBP เท่านั้น', 'error'); return; }
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showToast(`ไฟล์ใหญ่เกิน ${MAX_FILE_SIZE_MB}MB`, 'error'); return; }
+
+    const btn = document.getElementById('btn-submit-slip');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> กำลังอัปโหลด...';
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+        showToast('อ่านไฟล์ไม่สำเร็จ กรุณาลองใหม่', 'error');
+        resetSlipBtn();
+    };
+    reader.onload = async (e) => {
+        const base64Data = e.target.result;
+
+        if (!isMockMode) {
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 30000);
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'uploadSlip',
+                        rowId: selectedUserRowId,
+                        fileName: `slip_${selectedUserRowId}_${Date.now()}.jpg`,
+                        fileData: base64Data
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeout);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const result = await res.json();
+                if (result.status === 'success') {
+                    showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
+                    await refreshData();
+                    document.getElementById('payment-section').classList.add('hidden');
+                    fileInput.value = '';
+                } else {
+                    showToast('เกิดข้อผิดพลาด: ' + (result.message || 'ไม่ทราบสาเหตุ'), 'error');
+                }
+            } catch (err) {
+                const msg = err.name === 'AbortError'
+                    ? 'การอัปโหลดหมดเวลา กรุณาลองใหม่'
+                    : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
+                showToast(msg, 'error');
+            }
+        } else {
+            // Mock mode
+            const student = studentsData.find(s => s.rowId === selectedUserRowId);
+            if (student) { student.status = 'รอตรวจสอบ'; student.proofUrl = base64Data; }
+            showToast('[จำลอง] ส่งหลักฐานสำเร็จ!', 'success');
+            renderAll();
+            document.getElementById('payment-section').classList.add('hidden');
+            fileInput.value = '';
+        }
+        resetSlipBtn();
+    };
+    reader.readAsDataURL(file);
+}
+
+function resetSlipBtn() {
+    const btn = document.getElementById('btn-submit-slip');
+    btn.disabled = false;
+    btn.innerHTML = '<span>📤</span><span>ยืนยันการส่งหลักฐาน</span>';
+}
+
+// =====================================================================
+// ADMIN ACTIONS
+// =====================================================================
+async function approvePayment(rowId) {
+    if (!confirm('ยืนยันอนุมัติการชำระเงินนี้?')) return;
+    await adminAction('approve', rowId, 'อนุมัติเรียบร้อย ✅', s => { s.status = 'จ่ายแล้ว'; s.amountDue = 0; });
+}
+
+async function rejectPayment(rowId) {
+    if (!confirm('ปฏิเสธสลิปนี้ และรีเซ็ตสถานะเป็น "ยังไม่จ่าย"?')) return;
+    await adminAction('reject', rowId, 'ปฏิเสธสลิปเรียบร้อย', s => { s.status = 'ยังไม่จ่าย'; s.proofUrl = ''; });
+}
+
+async function adminAction(action, rowId, successMsg, mockFn) {
+    if (!isMockMode) {
+        showLoading(true);
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action, rowId })
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const result = await res.json();
+            if (result.status === 'success') {
+                showToast(successMsg, 'success');
+                await refreshData();
+            } else {
+                showToast('เกิดข้อผิดพลาด: ' + (result.message || ''), 'error');
+            }
+        } catch (err) {
+            showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error');
+        } finally {
+            showLoading(false);
+        }
+    } else {
+        const student = studentsData.find(s => s.rowId === rowId);
+        if (student) mockFn(student);
+        showToast('[จำลอง] ' + successMsg, 'success');
+        renderAll();
+    }
+}
+
+// =====================================================================
+// SLIP MODAL
+// =====================================================================
+function openSlipModal(encodedUrl) {
+    const url = decodeURIComponent(encodedUrl);
+    if (!isValidUrl(url) && !url.startsWith('data:image/')) {
+        showToast('ลิงก์รูปภาพไม่ถูกต้อง', 'error'); return;
+    }
+    document.getElementById('slip-modal-img').src = url;
+    document.getElementById('slip-modal-link').href = url.startsWith('data:') ? '#' : url;
+    document.getElementById('slip-modal-link').style.display = url.startsWith('data:') ? 'none' : '';
+    const modal = document.getElementById('slip-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSlipModal() {
+    const modal = document.getElementById('slip-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.getElementById('slip-modal-img').src = '';
+    document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSlipModal(); });
+
+// =====================================================================
+// VIEW SWITCH + ADMIN AUTH
+// =====================================================================
+function switchView(view) {
+    document.getElementById('user-view').classList.toggle('hidden', view !== 'user');
+    document.getElementById('admin-view').classList.toggle('hidden', view !== 'admin');
+    const active   = 'px-4 py-1.5 rounded-full bg-pink-500 text-white shadow-sm transition';
+    const inactive = 'px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition';
+    document.getElementById('btn-user-view').className  = view === 'user'  ? active : inactive;
+    document.getElementById('btn-admin-view').className = view === 'admin' ? active : inactive;
+}
+
+function requireAdminPassword(e) {
+    if (sessionStorage.getItem('cf_admin_auth') === '1') return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    const pw = prompt('🔒 กรุณาใส่รหัสผ่านเหรัญญิก:');
+    if (pw === ADMIN_PASSWORD) {
+        sessionStorage.setItem('cf_admin_auth', '1');
+        switchView('admin');
+    } else {
+        showToast('รหัสผ่านไม่ถูกต้อง', 'error');
+    }
+}
+
+// =====================================================================
+// UI HELPERS
+// =====================================================================
+function showLoading(show) {
+    document.getElementById('loading-overlay').classList.toggle('hidden', !show);
+}
+
+let toastTimer;
+function showToast(msg, type = 'info') {
+    clearTimeout(toastTimer);
+    const colors = { success: 'bg-emerald-500', error: 'bg-rose-500', info: 'bg-pink-500' };
+    const icons  = { success: '✅', error: '❌', info: 'ℹ️' };
+    const inner = document.getElementById('toast-inner');
+    inner.className = `px-5 py-3 rounded-2xl shadow-lg text-sm font-semibold text-white flex items-center gap-2 ${colors[type] || colors.info}`;
+    inner.textContent = `${icons[type] || ''} ${msg}`;
+    const toast = document.getElementById('toast');
+    toast.classList.remove('hidden');
+    toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+
+// =====================================================================
+// SECURITY HELPERS
+// =====================================================================
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function sanitizeText(str) {
+    return String(str).replace(/[<>"'`]/g, '').trim().slice(0, 200);
+}
+
+function isValidUrl(url) {
+    if (!url) return false;
+    try {
+        const u = new URL(url);
+        return ['https:', 'http:'].includes(u.protocol);
+    } catch { return false; }
+}
+</script>
+</body>
+</html>
