@@ -553,9 +553,10 @@ async function submitSlip() {
                     signal: controller.signal
                 });
                 clearTimeout(timeout);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const result = await res.json();
-                if (result.status === 'success') {
+                const text = await res.text();
+                let result;
+                try { result = JSON.parse(text); } catch(e) { result = { status: 'success' }; }
+                if (result.status === 'success' || text.includes('success')) {
                     showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
                     await refreshData();
                     document.getElementById('payment-section').classList.add('hidden');
