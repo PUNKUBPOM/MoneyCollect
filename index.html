@@ -123,7 +123,7 @@
                             onerror="this.alt='ไม่สามารถโหลด QR ได้'">
                     </div>
                     <!-- ✏️ [แก้ไข] เปลี่ยนชื่อบัญชีตามจริง -->
-                    <p class="text-xs text-gray-400 mt-1">ชื่อบัญชี: บัญชีเงินกองกลางห้อง229</p>
+                    <p class="text-xs text-gray-400 mt-1">ชื่อบัญชี: บัญชีเงินกองกลางห้อง 229</p>
                 </div>
 
                 <div class="space-y-3">
@@ -268,15 +268,14 @@ const ROOM_NAME = "ห้อง229";
 const PROMPTPAY_NUMBER = "0814065988";
 
 // ✏️ [แก้ไข 4] ยอดเงินค่าห้องต่อคน (บาท) — ใช้คำนวณยอดรวมที่เก็บได้
-const FEE_PER_PERSON = 150;
+const FEE_PER_PERSON = 500;
 
 // ✏️ [แก้ไข 5] Admin Password (ป้องกัน tab เหรัญญิก) — ถ้าไม่ต้องการก็ตั้งเป็น ""
-const ADMIN_PASSWORD = "Nowaybro";
+const ADMIN_PASSWORD = "์Nowaybro";
 
 // =====================================================================
 // MOCK DATA — ข้อมูลตัวอย่างสำหรับทดสอบ (ลบออกหรือเว้นว่างเมื่อต่อ API แล้ว)
 // ✏️ [แก้ไข 6] ใส่รายชื่อนักเรียนจริงของห้องที่นี่ (ก่อน API พร้อม)
-// =====================================================================
 
 // =====================================================================
 // APP STATE
@@ -553,6 +552,7 @@ async function submitSlip() {
                     signal: controller.signal
                 });
                 clearTimeout(timeout);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const text = await res.text();
                 let result;
                 try { result = JSON.parse(text); } catch(e) { result = { status: 'success' }; }
@@ -614,8 +614,10 @@ async function adminAction(action, rowId, successMsg, mockFn) {
                 body: JSON.stringify({ action, rowId })
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const result = await res.json();
-            if (result.status === 'success') {
+            const text = await res.text();
+            let result;
+            try { result = JSON.parse(text); } catch(e) { result = { status: 'success' }; }
+            if (result.status === 'success' || text.includes('success')) {
                 showToast(successMsg, 'success');
                 await refreshData();
             } else {
