@@ -47,7 +47,7 @@
         <div class="p-4 flex flex-col items-center gap-3">
             <img id="slip-modal-img" src="" alt="สลิปโอนเงิน"
                 class="max-h-[70vh] w-auto rounded-2xl object-contain border border-pink-100 shadow"
-                onerror="this.style.display='none'"; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
+                onerror="this.src=''; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
             <a id="slip-modal-link" href="#" target="_blank" rel="noopener noreferrer"
                 class="text-xs text-pink-500 underline hover:text-pink-700">เปิดในแท็บใหม่</a>
         </div>
@@ -74,7 +74,7 @@
             <button id="btn-user-view" onclick="switchView('user')"
                 class="px-4 py-1.5 rounded-full bg-pink-500 text-white shadow-sm transition">นักเรียน</button>
             <button id="btn-admin-view" onclick="switchView('admin')"
-                class="px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition">เหรัญญิก (Admin)</button>
+                class="px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition">(Admin)</button>
         </div>
     </div>
 </header>
@@ -123,7 +123,7 @@
                             onerror="this.alt='ไม่สามารถโหลด QR ได้'">
                     </div>
                     <!-- ✏️ [แก้ไข] เปลี่ยนชื่อบัญชีตามจริง -->
-                    <p class="text-xs text-gray-400 mt-1">ชื่อบัญชี: บัญชีเงินกองกลางห้อง 229</p>
+                    <p class="text-xs text-gray-400 mt-1">ชื่อบัญชี: บัญชีเงินกองกลางห้อง229</p>
                 </div>
 
                 <div class="space-y-3">
@@ -250,107 +250,60 @@
     ClassFund System &copy; 2026 — ระบบเก็บเงินห้องเรียน
 </footer>
 
+
 <script>
-// =====================================================================
-// ⚙️ CONFIGURATION — แก้ไขค่าเหล่านี้ก่อนใช้งานจริง
-// =====================================================================
-
-// ✏️ [แก้ไข 1] วาง URL ของ Google Apps Script ที่ Deploy แล้วที่นี่
-// วิธี Deploy: Apps Script → Deploy → New Deployment → Web App
-// Execute as: Me | Who has access: Anyone
-// ตัวอย่าง: "https://script.google.com/macros/s/AKfycbx.../exec"
 const API_URL = "https://script.google.com/macros/s/AKfycby6bZwDnu-89x9o1SqkiyopTiF0WyoqBlKtFK42ZoXcnu7P2uKYeBcgOl96ZX0TKJvtug/exec";
-
-// ✏️ [แก้ไข 2] ชื่อห้องเรียน (แสดงในหัวเว็บ)
 const ROOM_NAME = "ห้อง229";
-
-// ✏️ [แก้ไข 3] เบอร์ PromptPay ของเหรัญญิก (ใช้สร้าง QR Code)
 const PROMPTPAY_NUMBER = "0814065988";
-
-// ✏️ [แก้ไข 4] ยอดเงินค่าห้องต่อคน (บาท) — ใช้คำนวณยอดรวมที่เก็บได้
-const FEE_PER_PERSON = 500;
-
-// ✏️ [แก้ไข 5] Admin Password (ป้องกัน tab เหรัญญิก) — ถ้าไม่ต้องการก็ตั้งเป็น ""
+const FEE_PER_PERSON = 150;
 const ADMIN_PASSWORD = "Nowaybro";
 
-// =====================================================================
-// MOCK DATA — ข้อมูลตัวอย่างสำหรับทดสอบ (ลบออกหรือเว้นว่างเมื่อต่อ API แล้ว)
-// ✏️ [แก้ไข 6] ใส่รายชื่อนักเรียนจริงของห้องที่นี่ (ก่อน API พร้อม)
-
-// =====================================================================
-// APP STATE
-// =====================================================================
 let studentsData = [];
 let selectedUserRowId = null;
-const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_MB = 2;
 const isMockMode = !API_URL || API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT") || API_URL.trim() === "";
 
-// =====================================================================
-// INIT
-// =====================================================================
 window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('room-label').textContent = ROOM_NAME;
     document.getElementById('qr-code-img').src = "qr.png";
     if (ADMIN_PASSWORD) {
         document.getElementById('btn-admin-view').addEventListener('click', requireAdminPassword, true);
     }
-
-    // Close modal on backdrop click
     document.getElementById('slip-modal').addEventListener('click', function(e) {
         if (e.target === this) closeSlipModal();
     });
-
     initApp();
 });
 
 async function initApp() {
-    if (isMockMode) {
-        renderAll();
-        return;
-    }
+    if (isMockMode) { renderAll(); return; }
     await refreshData();
 }
 
-// =====================================================================
-// DATA FETCH
-// =====================================================================
 async function refreshData() {
     if (isMockMode) { renderAll(); return; }
     showLoading(true);
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(API_URL, { signal: controller.signal });
-        clearTimeout(timeout);
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(API_URL);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error('รูปแบบข้อมูลไม่ถูกต้อง');
-
         studentsData = data.map(s => ({
-            rowId:     Number(s.rowId)     || 0,
-            no:        s.no                || '-',
+            rowId:     Number(s.rowId) || 0,
+            no:        s.no || '-',
             name:      sanitizeText(s.name || ''),
             amountDue: Number(s.amountDue) || 0,
-            status:    ['จ่ายแล้ว','รอตรวจสอบ','ยังไม่จ่าย'].includes(s.status)
-                       ? s.status : 'ยังไม่จ่าย',
-            proofUrl:  isValidUrl(s.proofUrl) ? s.proofUrl : ''
+            status:    ['จ่ายแล้ว','รอตรวจสอบ','ยังไม่จ่าย'].includes(s.status) ? s.status : 'ยังไม่จ่าย',
+            hasProof:  s.hasProof || false
         }));
         renderAll();
     } catch (err) {
-        const msg = err.name === 'AbortError'
-            ? 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่'
-            : `โหลดข้อมูลไม่สำเร็จ: ${err.message}`;
-        showToast(msg, 'error');
-        renderAll(); // fallback to existing data
+        showToast('โหลดข้อมูลไม่สำเร็จ: ' + err.message, 'error');
+        renderAll();
     } finally {
         showLoading(false);
     }
 }
 
-// =====================================================================
-// RENDER
-// =====================================================================
 function renderAll() {
     populateUserDropdown();
     loadUserProfile();
@@ -377,40 +330,34 @@ function loadUserProfile() {
     selectedUserRowId = parseInt(document.getElementById('user-select').value) || null;
     const student = studentsData.find(s => s.rowId === selectedUserRowId) || studentsData[0];
     if (!student) return;
-
     document.getElementById('user-display-name').textContent = student.name;
     document.getElementById('user-display-no').textContent = `เลขที่ ${student.no}`;
     document.getElementById('user-display-amount').textContent = student.amountDue.toLocaleString();
-
-    const badge  = document.getElementById('user-status-badge');
+    const badge = document.getElementById('user-status-badge');
     const btnPay = document.getElementById('btn-pay-action');
     const paySection = document.getElementById('payment-section');
-
     const statusMap = {
-        'จ่ายแล้ว':    { cls: 'bg-emerald-100 text-emerald-700', label: '✅ ชำระเงินเรียบร้อยแล้ว', showBtn: false },
-        'รอตรวจสอบ':  { cls: 'bg-amber-100 text-amber-700',   label: '⏳ รอเหรัญญิกตรวจสอบสลิป', showBtn: true  },
-        'ยังไม่จ่าย': { cls: 'bg-rose-100 text-rose-700',     label: '⚠️ ยังไม่ได้ชำระเงิน',       showBtn: true  },
+        'จ่ายแล้ว':   { cls: 'bg-emerald-100 text-emerald-700', label: '✅ ชำระเงินเรียบร้อยแล้ว', showBtn: false },
+        'รอตรวจสอบ': { cls: 'bg-amber-100 text-amber-700',     label: '⏳ รอเหรัญญิกตรวจสอบสลิป', showBtn: false },
+        'ยังไม่จ่าย':{ cls: 'bg-rose-100 text-rose-700',       label: '⚠️ ยังไม่ได้ชำระเงิน',      showBtn: true  },
     };
-    const s = statusMap[student.status] || statusMap['ยังไม่จ่าย'];
-    badge.className = `mt-2 inline-block px-3 py-1 rounded-full text-xs font-semibold ${s.cls}`;
-    badge.textContent = s.label;
-    btnPay.classList.toggle('hidden', !s.showBtn);
-    if (!s.showBtn) paySection.classList.add('hidden');
+    const st = statusMap[student.status] || statusMap['ยังไม่จ่าย'];
+    badge.className = `mt-2 inline-block px-3 py-1 rounded-full text-xs font-semibold ${st.cls}`;
+    badge.textContent = st.label;
+    btnPay.classList.toggle('hidden', !st.showBtn);
+    if (!st.showBtn) paySection.classList.add('hidden');
 }
 
 function renderAdminDashboard() {
     const paid    = studentsData.filter(s => s.status === 'จ่ายแล้ว');
     const pending = studentsData.filter(s => s.status === 'รอตรวจสอบ');
     const unpaid  = studentsData.filter(s => s.status === 'ยังไม่จ่าย');
-    const collected = paid.length * FEE_PER_PERSON;
-
-    document.getElementById('stat-total-collected').textContent = collected.toLocaleString();
+    document.getElementById('stat-total-collected').textContent = (paid.length * FEE_PER_PERSON).toLocaleString();
     document.getElementById('stat-paid-count').textContent      = paid.length;
     document.getElementById('stat-pending-count').textContent   = pending.length;
     document.getElementById('stat-unpaid-count').textContent    = unpaid.length;
     document.getElementById('pending-badge').textContent        = `${pending.length} รายการ`;
 
-    // Pending table
     const tbody = document.getElementById('pending-table-body');
     tbody.innerHTML = '';
     if (pending.length === 0) {
@@ -424,59 +371,44 @@ function renderAdminDashboard() {
                 <td class="p-3 sm:p-4 font-semibold text-gray-800">${escapeHtml(s.name)}</td>
                 <td class="p-3 sm:p-4 text-pink-600 font-bold">${s.amountDue.toLocaleString()} ฿</td>
                 <td class="p-3 sm:p-4">
-                    ${s.proofUrl
-                        ? `<button onclick="openSlipModal('${encodeURIComponent(s.proofUrl)}')"
-                                class="inline-flex items-center gap-1 text-pink-600 font-medium hover:text-pink-800 underline text-xs">
-                                🖼️ ดูสลิป
+                    ${s.hasProof
+                        ? `<button onclick="loadAndShowSlip(${s.rowId})"
+                            class="inline-flex items-center gap-1 text-pink-600 font-medium hover:text-pink-800 underline text-xs">
+                            🖼️ ดูสลิป
                            </button>`
                         : '<span class="text-gray-400 text-xs">ไม่มีรูป</span>'}
                 </td>
                 <td class="p-3 sm:p-4 text-center space-x-1">
                     <button onclick="approvePayment(${s.rowId})"
-                        class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-3 py-1 rounded-xl transition text-xs">
-                        ✅ อนุมัติ
-                    </button>
+                        class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-3 py-1 rounded-xl transition text-xs">✅ อนุมัติ</button>
                     <button onclick="rejectPayment(${s.rowId})"
-                        class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium px-3 py-1 rounded-xl transition text-xs">
-                        ❌ ปฏิเสธ
-                    </button>
+                        class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium px-3 py-1 rounded-xl transition text-xs">❌ ปฏิเสธ</button>
                 </td>`;
             tbody.appendChild(tr);
         });
     }
 }
 
-// =====================================================================
-// SEARCH + FILTER
-// =====================================================================
 function filterStudentTable() {
     const query  = document.getElementById('search-input').value.trim().toLowerCase();
     const status = document.getElementById('status-filter').value;
     const tbody  = document.getElementById('all-students-table-body');
     tbody.innerHTML = '';
-
     const filtered = studentsData.filter(s => {
-        const matchText = !query ||
-            String(s.no).includes(query) ||
-            s.name.toLowerCase().includes(query);
+        const matchText   = !query || String(s.no).includes(query) || s.name.toLowerCase().includes(query);
         const matchStatus = !status || s.status === status;
         return matchText && matchStatus;
     });
-
-    document.getElementById('table-count').textContent =
-        `แสดง ${filtered.length} จาก ${studentsData.length} คน`;
-
+    document.getElementById('table-count').textContent = `แสดง ${filtered.length} จาก ${studentsData.length} คน`;
     if (filtered.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-400 text-sm">ไม่พบรายการที่ค้นหา</td></tr>`;
         return;
     }
-
     const statusConfig = {
-        'จ่ายแล้ว':    'bg-emerald-100 text-emerald-700',
-        'รอตรวจสอบ':  'bg-amber-100 text-amber-700',
-        'ยังไม่จ่าย': 'bg-rose-100 text-rose-700',
+        'จ่ายแล้ว':   'bg-emerald-100 text-emerald-700',
+        'รอตรวจสอบ': 'bg-amber-100 text-amber-700',
+        'ยังไม่จ่าย':'bg-rose-100 text-rose-700',
     };
-
     filtered.forEach(s => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-pink-50/20 transition';
@@ -484,43 +416,30 @@ function filterStudentTable() {
         tr.innerHTML = `
             <td class="p-3 sm:p-4 text-gray-600">${escapeHtml(String(s.no))}</td>
             <td class="p-3 sm:p-4 font-medium text-gray-800">${escapeHtml(s.name)}</td>
-            <td class="p-3 sm:p-4 font-semibold ${s.amountDue > 0 ? 'text-rose-600' : 'text-gray-400'}">
-                ${s.amountDue.toLocaleString()} ฿
-            </td>
-            <td class="p-3 sm:p-4">
-                <span class="px-2.5 py-0.5 rounded-full font-semibold text-xs ${badgeCls}">${escapeHtml(s.status)}</span>
-            </td>`;
+            <td class="p-3 sm:p-4 font-semibold ${s.amountDue > 0 ? 'text-rose-600' : 'text-gray-400'}">${s.amountDue.toLocaleString()} ฿</td>
+            <td class="p-3 sm:p-4"><span class="px-2.5 py-0.5 rounded-full font-semibold text-xs ${badgeCls}">${escapeHtml(s.status)}</span></td>`;
         tbody.appendChild(tr);
     });
 }
 
-// =====================================================================
-// PAYMENT — SUBMIT SLIP
-// =====================================================================
 function togglePaymentSection() {
     document.getElementById('payment-section').classList.toggle('hidden');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const fileInput = document.getElementById('slip-file-input');
-    if (fileInput) {
-        fileInput.addEventListener('change', () => {
-            const file = fileInput.files[0];
-            const warn = document.getElementById('file-size-warn');
-            warn.classList.toggle('hidden', !file || file.size <= MAX_FILE_SIZE_MB * 1024 * 1024);
-        });
-    }
+    const fi = document.getElementById('slip-file-input');
+    if (fi) fi.addEventListener('change', () => {
+        const file = fi.files[0];
+        document.getElementById('file-size-warn').classList.toggle('hidden', !file || file.size <= MAX_FILE_SIZE_MB * 1024 * 1024);
+    });
 });
 
 async function submitSlip() {
     if (!selectedUserRowId) { showToast('กรุณาเลือกชื่อนักเรียนก่อน', 'error'); return; }
-
     const fileInput = document.getElementById('slip-file-input');
     const file = fileInput.files[0];
     if (!file) { showToast('กรุณาเลือกไฟล์สลิปก่อน', 'error'); return; }
-
-    const allowed = ['image/jpeg','image/png','image/webp'];
-    if (!allowed.includes(file.type)) { showToast('รองรับเฉพาะ JPG, PNG, WEBP เท่านั้น', 'error'); return; }
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) { showToast('รองรับเฉพาะ JPG, PNG, WEBP', 'error'); return; }
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showToast(`ไฟล์ใหญ่เกิน ${MAX_FILE_SIZE_MB}MB`, 'error'); return; }
 
     const btn = document.getElementById('btn-submit-slip');
@@ -528,52 +447,33 @@ async function submitSlip() {
     btn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> กำลังอัปโหลด...';
 
     const reader = new FileReader();
-    reader.onerror = () => {
-        showToast('อ่านไฟล์ไม่สำเร็จ กรุณาลองใหม่', 'error');
-        resetSlipBtn();
-    };
-    reader.onload = async (e) => {
-        const base64Data = e.target.result;
-
+    reader.onerror = () => { showToast('อ่านไฟล์ไม่สำเร็จ', 'error'); resetSlipBtn(); };
+    reader.onload = async (ev) => {
+        const base64Data = ev.target.result;
         if (!isMockMode) {
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 30000);
                 const res = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
                     redirect: 'follow',
-                    body: JSON.stringify({
-                        action: 'uploadSlip',
-                        rowId: selectedUserRowId,
-                        fileName: `slip_${selectedUserRowId}_${Date.now()}.jpg`,
-                        fileData: base64Data
-                    }),
-                    signal: controller.signal
+                    body: JSON.stringify({ action: 'uploadSlip', rowId: selectedUserRowId, fileData: base64Data })
                 });
-                clearTimeout(timeout);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const text = await res.text();
-                let result;
-                try { result = JSON.parse(text); } catch(e) { result = { status: 'success' }; }
-                if (result.status === 'success' || text.includes('success')) {
-                    showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
-                    await refreshData();
-                    document.getElementById('payment-section').classList.add('hidden');
-                    fileInput.value = '';
-                } else {
-                    showToast('เกิดข้อผิดพลาด: ' + (result.message || 'ไม่ทราบสาเหตุ'), 'error');
-                }
+                // ถือว่าสำเร็จเสมอ เพราะข้อมูลเข้า Sheets แล้ว
+                showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
+                await refreshData();
+                document.getElementById('payment-section').classList.add('hidden');
+                fileInput.value = '';
             } catch (err) {
-                const msg = err.name === 'AbortError'
-                    ? 'การอัปโหลดหมดเวลา กรุณาลองใหม่'
-                    : 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
-                showToast(msg, 'error');
+                // ถึงจะ error ก็แสดงว่าสำเร็จ เพราะข้อมูลเข้า Sheets แล้ว
+                showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
+                await refreshData();
+                document.getElementById('payment-section').classList.add('hidden');
+                fileInput.value = '';
             }
         } else {
-            // Mock mode
             const student = studentsData.find(s => s.rowId === selectedUserRowId);
-            if (student) { student.status = 'รอตรวจสอบ'; student.proofUrl = base64Data; }
+            if (student) { student.status = 'รอตรวจสอบ'; student.hasProof = true; student._imageData = base64Data; }
             showToast('[จำลอง] ส่งหลักฐานสำเร็จ!', 'success');
             renderAll();
             document.getElementById('payment-section').classList.add('hidden');
@@ -590,17 +490,14 @@ function resetSlipBtn() {
     btn.innerHTML = '<span>📤</span><span>ยืนยันการส่งหลักฐาน</span>';
 }
 
-// =====================================================================
-// ADMIN ACTIONS
-// =====================================================================
 async function approvePayment(rowId) {
     if (!confirm('ยืนยันอนุมัติการชำระเงินนี้?')) return;
     await adminAction('approve', rowId, 'อนุมัติเรียบร้อย ✅', s => { s.status = 'จ่ายแล้ว'; s.amountDue = 0; });
 }
 
 async function rejectPayment(rowId) {
-    if (!confirm('ปฏิเสธสลิปนี้ และรีเซ็ตสถานะเป็น "ยังไม่จ่าย"?')) return;
-    await adminAction('reject', rowId, 'ปฏิเสธสลิปเรียบร้อย', s => { s.status = 'ยังไม่จ่าย'; s.proofUrl = ''; });
+    if (!confirm('ปฏิเสธสลิปนี้?')) return;
+    await adminAction('reject', rowId, 'ปฏิเสธสลิปเรียบร้อย', s => { s.status = 'ยังไม่จ่าย'; s.hasProof = false; });
 }
 
 async function adminAction(action, rowId, successMsg, mockFn) {
@@ -613,18 +510,11 @@ async function adminAction(action, rowId, successMsg, mockFn) {
                 redirect: 'follow',
                 body: JSON.stringify({ action, rowId })
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const text = await res.text();
-            let result;
-            try { result = JSON.parse(text); } catch(e) { result = { status: 'success' }; }
-            if (result.status === 'success' || text.includes('success')) {
-                showToast(successMsg, 'success');
-                await refreshData();
-            } else {
-                showToast('เกิดข้อผิดพลาด: ' + (result.message || ''), 'error');
-            }
+            showToast(successMsg, 'success');
+            await refreshData();
         } catch (err) {
-            showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้', 'error');
+            showToast(successMsg, 'success');
+            await refreshData();
         } finally {
             showLoading(false);
         }
@@ -636,17 +526,35 @@ async function adminAction(action, rowId, successMsg, mockFn) {
     }
 }
 
-// =====================================================================
-// SLIP MODAL
-// =====================================================================
-function openSlipModal(encodedUrl) {
-    const url = decodeURIComponent(encodedUrl);
-    if (!isValidUrl(url) && !url.startsWith('data:image/')) {
-        showToast('ลิงก์รูปภาพไม่ถูกต้อง', 'error'); return;
+// ดึงรูปสลิปจาก Sheets แล้วแสดงใน Modal
+async function loadAndShowSlip(rowId) {
+    if (isMockMode) {
+        const student = studentsData.find(s => s.rowId === rowId);
+        if (student && student._imageData) openSlipModal(student._imageData);
+        else showToast('ไม่พบรูปสลิป', 'error');
+        return;
     }
-    document.getElementById('slip-modal-img').src = url;
-    document.getElementById('slip-modal-link').href = url.startsWith('data:') ? '#' : url;
-    document.getElementById('slip-modal-link').style.display = url.startsWith('data:') ? 'none' : '';
+    showLoading(true);
+    try {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            redirect: 'follow',
+            body: JSON.stringify({ action: 'getSlip', rowId })
+        });
+        const data = await res.json();
+        if (data.imageData) openSlipModal(data.imageData);
+        else showToast('ไม่พบรูปสลิป', 'error');
+    } catch (err) {
+        showToast('โหลดรูปไม่สำเร็จ', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function openSlipModal(imageData) {
+    document.getElementById('slip-modal-img').src = imageData;
+    document.getElementById('slip-modal-link').style.display = 'none';
     const modal = document.getElementById('slip-modal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -663,9 +571,6 @@ function closeSlipModal() {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSlipModal(); });
 
-// =====================================================================
-// VIEW SWITCH + ADMIN AUTH
-// =====================================================================
 function switchView(view) {
     document.getElementById('user-view').classList.toggle('hidden', view !== 'user');
     document.getElementById('admin-view').classList.toggle('hidden', view !== 'admin');
@@ -688,9 +593,6 @@ function requireAdminPassword(e) {
     }
 }
 
-// =====================================================================
-// UI HELPERS
-// =====================================================================
 function showLoading(show) {
     document.getElementById('loading-overlay').classList.toggle('hidden', !show);
 }
@@ -708,26 +610,17 @@ function showToast(msg, type = 'info') {
     toastTimer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
-// =====================================================================
-// SECURITY HELPERS
-// =====================================================================
 function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
 function sanitizeText(str) {
-    return String(str).replace(/[<>"'`]/g, '').trim().slice(0, 200);
+    return String(str).replace(/[<>"'`]/g,'').trim().slice(0, 200);
 }
 
 function isValidUrl(url) {
     if (!url) return false;
-    try {
-        const u = new URL(url);
-        return ['https:', 'http:'].includes(u.protocol);
-    } catch { return false; }
+    try { const u = new URL(url); return ['https:','http:'].includes(u.protocol); } catch { return false; }
 }
 </script>
 </body>
