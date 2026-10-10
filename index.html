@@ -29,7 +29,7 @@
         @media print { header, footer, button, #user-view { display: none; } }
     </style>
 </head>
-<body class="bg-pink-50 min-h-screen text-gray-800 flex flex-col">
+<body class="bg-pink-50 min-h-screen text-gray-800 flex-col">
 
 <!-- ========== LOADING OVERLAY ========== -->
 <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-[999] flex flex-col items-center justify-center hidden">
@@ -47,7 +47,7 @@
         <div class="p-4 flex flex-col items-center gap-3">
             <img id="slip-modal-img" src="" alt="สลิปโอนเงิน"
                 class="max-h-[70vh] w-auto rounded-2xl object-contain border border-pink-100 shadow"
-                onerror="this.style.display='none'"; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
+                onerror="this.style.display='none'; this.parentElement.innerHTML='<p class=\'text-gray-400 text-sm py-8\'>ไม่สามารถโหลดรูปได้</p>'">
             <a id="slip-modal-link" href="#" target="_blank" rel="noopener noreferrer"
                 class="text-xs text-pink-500 underline hover:text-pink-700">เปิดในแท็บใหม่</a>
         </div>
@@ -65,16 +65,13 @@
         <div class="flex items-center space-x-2">
             <span class="text-2xl">💖</span>
             <div>
-                <!-- ✏️ [แก้ไข] เปลี่ยนชื่อระบบ/ห้องของคุณได้ที่นี่ -->
                 <span class="text-xl font-bold text-pink-600 tracking-tight">ClassFund</span>
                 <span id="room-label" class="text-xs text-gray-400 ml-1">ห้อง229</span>
             </div>
         </div>
         <div class="bg-pink-100 p-1 rounded-full flex space-x-1 text-sm font-medium">
-            <button id="btn-user-view" onclick="switchView('user')"
-                class="px-4 py-1.5 rounded-full bg-pink-500 text-white shadow-sm transition">นักเรียน</button>
-            <button id="btn-admin-view" onclick="switchView('admin')"
-                class="px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition">(Admin)</button>
+            <button id="btn-user-view" onclick="switchView('user')" class="px-4 py-1.5 rounded-full bg-pink-500 text-white shadow-sm transition">นักเรียน</button>
+            <button id="btn-admin-view" onclick="switchView('admin')" class="px-4 py-1.5 rounded-full text-pink-700 hover:bg-pink-200 transition">(Admin)</button>
         </div>
     </div>
 </header>
@@ -118,7 +115,7 @@
                     <div class="inline-block p-3 bg-white border-2 border-pink-200 rounded-2xl shadow-sm">
                         <!-- ✏️ [แก้ไข] เปลี่ยนเบอร์ PromptPay ในลิงก์ด้านล่าง (แทนที่ 0812345678 ด้วยเบอร์ของเหรัญญิก) -->
                         <img id="qr-code-img"
-                            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=0812345678"
+                            src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=0814065988"
                             alt="PromptPay QR Code" class="w-44 h-44 mx-auto rounded-lg"
                             onerror="this.alt='ไม่สามารถโหลด QR ได้'">
                     </div>
@@ -258,14 +255,62 @@ const PROMPTPAY_NUMBER = "0814065988";
 const FEE_PER_PERSON = 150;
 const ADMIN_PASSWORD = "Nowaybro";
 
-let studentsData = [];
-let selectedUserRowId = null;
-const MAX_FILE_SIZE_MB = 2;
+// ============================================================
+// PER-STUDENT QR CODE FUNCTIONALITY
+// ============================================================
+// QR code data format: Student info encoded in QR
+// Format: student:name|no:NO|amount:AMOUNT|pay:PROMPTPAY_NUMBER
+const QR_BASE_URL = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
+
+// Store QR code URLs per student (keyed by rowId)
+let studentQrCodes = {};
+
+// Initialize QR code data when app starts
+function initQrCodes() {
+    // QR codes will be generated/stored when studentsData is populated
+}
+
+// Generate QR code URL for a student
+function generateStudentQrUrl(rowId, name, no, amountDue) {
+    const qrData = `student:${rowId}|name:${name}|no:${no}|amount:${amountDue}|pay:${PROMPTPAY_NUMBER}`;
+    return `${QR_BASE_URL}${encodeURIComponent(qrData)}`;
+}
+
+// Store QR code URL in Google Sheets (called when data is saved)
+async function storeQrCodeInSheets(rowId, qrUrl) {
+    if (isMockMode) {
+        studentQrCodes[rowId] = qrUrl;
+        return;
+    }
+    try {
+        await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            redirect: 'follow',
+            body: JSON.stringify({ action: 'storeQrCode', rowId, qrUrl })
+        });
+        // Store locally for immediate use
+        studentQrCodes[rowId] = qrUrl;
+    } catch (err) {
+        // Even if API fails, store locally for this session
+        studentQrCodes[rowId] = qrUrl;
+    }
+}
+
+// Get stored QR code URL for a student
+function getStudentQrUrl(rowId) {
+    return studentQrCodes[rowId] || null;
+}
+
+// ============================================================
+// ORIGINAL CODE MODIFICATIONS START HERE
+// ============================================================
+
 const isMockMode = !API_URL || API_URL.includes("YOUR_GOOGLE_APPS_SCRIPT") || API_URL.trim() === "";
 
 window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('room-label').textContent = ROOM_NAME;
-    document.getElementById('qr-code-img').src = "qr.png";
+    document.getElementById('qr-code-img').src = qrCodeForStudent(selectedUserRowId);
     if (ADMIN_PASSWORD) {
         document.getElementById('btn-admin-view').addEventListener('click', requireAdminPassword, true);
     }
@@ -293,8 +338,21 @@ async function refreshData() {
             name:      sanitizeText(s.name || ''),
             amountDue: Number(s.amountDue) || 0,
             status:    ['จ่ายแล้ว','รอตรวจสอบ','ยังไม่จ่าย'].includes(s.status) ? s.status : 'ยังไม่จ่าย',
-            hasProof:  s.hasProof || false
+            hasProof:  s.hasProof || false,
+            qrUrl:     s.qrUrl || ''  // Fetch stored QR URL from Sheets
         }));
+        
+        // Store QR codes for each student
+        studentsData.forEach(s => {
+            if (!s.qrUrl) {
+                // Generate and store QR code if not exists
+                const qrUrl = generateStudentQrUrl(s.rowId, s.name, s.no, s.amountDue);
+                storeQrCodeInSheets(s.rowId, qrUrl);
+            } else {
+                studentQrCodes[s.rowId] = s.qrUrl;
+            }
+        });
+        
         renderAll();
     } catch (err) {
         showToast('โหลดข้อมูลไม่สำเร็จ: ' + err.message, 'error');
@@ -304,11 +362,14 @@ async function refreshData() {
     }
 }
 
+// Keep original renderAll function but add QR code updates
 function renderAll() {
     populateUserDropdown();
     loadUserProfile();
     renderAdminDashboard();
     filterStudentTable();
+    // Update QR codes display after data is rendered
+    updateQrCodeDisplays();
 }
 
 function populateUserDropdown() {
@@ -346,7 +407,25 @@ function loadUserProfile() {
     badge.textContent = st.label;
     btnPay.classList.toggle('hidden', !st.showBtn);
     if (!st.showBtn) paySection.classList.add('hidden');
+    
+    // Update QR code in user view
+    updateUserQrCode(student);
 }
+
+function updateUserQrCode(student) {
+    const qrImg = document.getElementById('qr-code-img');
+    if (student.qrUrl) {
+        qrImg.src = student.qrUrl;
+    } else {
+        // Generate on-the-fly if no stored URL
+        const qrUrl = generateStudentQrUrl(student.rowId, student.name, student.no, student.amountDue);
+        qrImg.src = qrUrl;
+    }
+}
+
+// ============================================================
+// ADMIN DASHBOARD FUNCTIONS (modified)
+// ============================================================
 
 function renderAdminDashboard() {
     const paid    = studentsData.filter(s => s.status === 'จ่ายแล้ว');
@@ -383,56 +462,42 @@ function renderAdminDashboard() {
                         class="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-medium px-3 py-1 rounded-xl transition text-xs">✅ อนุมัติ</button>
                     <button onclick="rejectPayment(${s.rowId})"
                         class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-medium px-3 py-1 rounded-xl transition text-xs">❌ ปฏิเสธ</button>
-                </td>`;
+                </td>
+                <td class="p-3 sm:p-4">
+                    <button onclick="viewStudentQr(${s.rowId})"
+                        class="bg-pink-100 hover:bg-pink-200 text-pink-700 font-medium px-3 py-1 rounded-xl transition text-xs">
+                        📱 ดู QR ของนักเรียน
+                    </button>
+                </td>
+`;
             tbody.appendChild(tr);
         });
     }
 }
 
-function filterStudentTable() {
-    const query  = document.getElementById('search-input').value.trim().toLowerCase();
-    const status = document.getElementById('status-filter').value;
-    const tbody  = document.getElementById('all-students-table-body');
-    tbody.innerHTML = '';
-    const filtered = studentsData.filter(s => {
-        const matchText   = !query || String(s.no).includes(query) || s.name.toLowerCase().includes(query);
-        const matchStatus = !status || s.status === status;
-        return matchText && matchStatus;
-    });
-    document.getElementById('table-count').textContent = `แสดง ${filtered.length} จาก ${studentsData.length} คน`;
-    if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-400 text-sm">ไม่พบรายการที่ค้นหา</td></tr>`;
-        return;
+// New function: View student QR code in admin
+function viewStudentQr(rowId) {
+    const student = studentsData.find(s => s.rowId === rowId);
+    if (student && student.qrUrl) {
+        openSlipModal(student.qrUrl);  // Reuse modal to show QR
+    } else {
+        showToast('ไม่มี QR Code สำหรับนักเรียนนี้', 'error');
     }
-    const statusConfig = {
-        'จ่ายแล้ว':   'bg-emerald-100 text-emerald-700',
-        'รอตรวจสอบ': 'bg-amber-100 text-amber-700',
-        'ยังไม่จ่าย':'bg-rose-100 text-rose-700',
-    };
-    filtered.forEach(s => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-pink-50/20 transition';
-        const badgeCls = statusConfig[s.status] || 'bg-gray-100 text-gray-600';
-        tr.innerHTML = `
-            <td class="p-3 sm:p-4 text-gray-600">${escapeHtml(String(s.no))}</td>
-            <td class="p-3 sm:p-4 font-medium text-gray-800">${escapeHtml(s.name)}</td>
-            <td class="p-3 sm:p-4 font-semibold ${s.amountDue > 0 ? 'text-rose-600' : 'text-gray-400'}">${s.amountDue.toLocaleString()} ฿</td>
-            <td class="p-3 sm:p-4"><span class="px-2.5 py-0.5 rounded-full font-semibold text-xs ${badgeCls}">${escapeHtml(s.status)}</span></td>`;
-        tbody.appendChild(tr);
-    });
 }
 
-function togglePaymentSection() {
-    document.getElementById('payment-section').classList.toggle('hidden');
+// Modify openSlipModal to also accept URLs
+function openSlipModal(imageData) {
+    document.getElementById('slip-modal-img').src = imageData;
+    document.getElementById('slip-modal-link').style.display = 'none';
+    const modal = document.getElementById('slip-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.body.style.overflow = 'hidden';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    const fi = document.getElementById('slip-file-input');
-    if (fi) fi.addEventListener('change', () => {
-        const file = fi.files[0];
-        document.getElementById('file-size-warn').classList.toggle('hidden', !file || file.size <= MAX_FILE_SIZE_MB * 1024 * 1024);
-    });
-});
+// ============================================================
+// SLIP UPLOAD WITH QR CODE PERSISTENCE
+// ============================================================
 
 async function submitSlip() {
     if (!selectedUserRowId) { showToast('กรุณาเลือกชื่อนักเรียนก่อน', 'error'); return; }
@@ -440,7 +505,7 @@ async function submitSlip() {
     const file = fileInput.files[0];
     if (!file) { showToast('กรุณาเลือกไฟล์สลิปก่อน', 'error'); return; }
     if (!['image/jpeg','image/png','image/webp'].includes(file.type)) { showToast('รองรับเฉพาะ JPG, PNG, WEBP', 'error'); return; }
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { showToast(`ไฟล์ใหญ่เกิน ${MAX_FILE_SIZE_MB}MB`, 'error'); return; }
+    if (file.size > 2 * 1024 * 1024) { showToast('ไฟล์ใหญ่เกิน 2MB', 'error'); return; }
 
     const btn = document.getElementById('btn-submit-slip');
     btn.disabled = true;
@@ -459,13 +524,13 @@ async function submitSlip() {
                     body: JSON.stringify({ action: 'uploadSlip', rowId: selectedUserRowId, fileData: base64Data })
                 });
                 const text = await res.text();
-                // ถือว่าสำเร็จเสมอ เพราะข้อมูลเข้า Sheets แล้ว
+                // Most important: After storing slip, also ensure QR code persists
+                await ensureQrCodePersists(selectedUserRowId);
                 showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
                 await refreshData();
                 document.getElementById('payment-section').classList.add('hidden');
                 fileInput.value = '';
             } catch (err) {
-                // ถึงจะ error ก็แสดงว่าสำเร็จ เพราะข้อมูลเข้า Sheets แล้ว
                 showToast('ส่งหลักฐานสำเร็จ! รอเหรัญญิกตรวจสอบ 🎉', 'success');
                 await refreshData();
                 document.getElementById('payment-section').classList.add('hidden');
@@ -473,7 +538,13 @@ async function submitSlip() {
             }
         } else {
             const student = studentsData.find(s => s.rowId === selectedUserRowId);
-            if (student) { student.status = 'รอตรวจสอบ'; student.hasProof = true; student._imageData = base64Data; }
+            if (student) { 
+                student.status = 'รอตรวจสอบ'; 
+                student.hasProof = true; 
+                student._imageData = base64Data;
+                // Ensure QR code is stored
+                await ensureQrCodePersists(selectedUserRowId); 
+            }
             showToast('[จำลอง] ส่งหลักฐานสำเร็จ!', 'success');
             renderAll();
             document.getElementById('payment-section').classList.add('hidden');
@@ -484,12 +555,32 @@ async function submitSlip() {
     reader.readAsDataURL(file);
 }
 
-function resetSlipBtn() {
-    const btn = document.getElementById('btn-submit-slip');
-    btn.disabled = false;
-    btn.innerHTML = '<span>📤</span><span>ยืนยันการส่งหลักฐาน</span>';
+// NEW: Ensure QR code is stored/updated in Google Sheets after any change
+async function ensureQrCodePersists(rowId) {
+    const student = studentsData.find(s => s.rowId === rowId);
+    if (!student) return;
+    
+    // Generate QR code URL for this student
+    const qrUrl = generateStudentQrUrl(student.rowId, student.name, student.no, student.amountDue);
+    
+    // Store in Google Sheets
+    if (!isMockMode) {
+        try {
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                redirect: 'follow',
+                body: JSON.stringify({ action: 'storeQrCode', rowId, qrUrl })
+            });
+        } catch (err) {
+            // Ignore errors, store locally
+        }
+    }
+    studentQrCodes[rowId] = qrUrl;
+    student.qrUrl = qrUrl;
 }
 
+// Keep original functions but modified where needed
 async function approvePayment(rowId) {
     if (!confirm('ยืนยันอนุมัติการชำระเงินนี้?')) return;
     await adminAction('approve', rowId, 'อนุมัติเรียบร้อย ✅', s => { s.status = 'จ่ายแล้ว'; s.amountDue = 0; });
@@ -521,12 +612,14 @@ async function adminAction(action, rowId, successMsg, mockFn) {
     } else {
         const student = studentsData.find(s => s.rowId === rowId);
         if (student) mockFn(student);
+        // Ensure QR code persists after admin action
+        await ensureQrCodePersists(rowId);
         showToast('[จำลอง] ' + successMsg, 'success');
         renderAll();
     }
 }
 
-// ดึงรูปสลิปจาก Sheets แล้วแสดงใน Modal
+// Modify loadAndShowSlip to also handle QR codes
 async function loadAndShowSlip(rowId) {
     if (isMockMode) {
         const student = studentsData.find(s => s.rowId === rowId);
@@ -552,24 +645,50 @@ async function loadAndShowSlip(rowId) {
     }
 }
 
-function openSlipModal(imageData) {
-    document.getElementById('slip-modal-img').src = imageData;
-    document.getElementById('slip-modal-link').style.display = 'none';
-    const modal = document.getElementById('slip-modal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-    document.body.style.overflow = 'hidden';
+// ============================================================
+// TABLE FILTERING (original with minor adjustments)
+// ============================================================
+
+function filterStudentTable() {
+    const query  = document.getElementById('search-input').value.trim().toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    const tbody  = document.getElementById('all-students-table-body');
+    tbody.innerHTML = '';
+    const filtered = studentsData.filter(s => {
+        const matchText   = !query || String(s.no).includes(query) || s.name.toLowerCase().includes(query);
+        const matchStatus = !status || s.status === status;
+        return matchText && matchStatus;
+    });
+    document.getElementById('table-count').textContent = `แสดง ${filtered.length} จาก ${studentsData.length} คน`;
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-gray-400 text-sm">ไม่พบรายการที่ค้นหา</td></tr>`;
+        return;
+    }
+    const statusConfig = {
+        'จ่ายแล้ว':   'bg-emerald-100 text-emerald-700',
+        'รอตรวจสอบ': 'bg-amber-100 text-amber-700',
+        'ยังไม่จ่าย':'bg-rose-100 text-rose-700',
+    };
+    filtered.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-pink-50/20 transition';
+        const badgeCls = statusConfig[s.status] || 'bg-gray-100 text-gray-600';
+        // Add QR code column
+        const qrHtml = s.qrUrl 
+            ? `<div class="p-1"><img src="${s.qrUrl}" class="w-12 h-12 rounded-sm" alt="QR"></div>`
+            : '';
+        tr.innerHTML = `
+            <td class="p-3 sm:p-4 text-gray-600">${escapeHtml(String(s.no))}</td>
+            <td class="p-3 sm:p-4 font-medium text-gray-800">${escapeHtml(s.name)}</td>
+            <td class="p-3 sm:p-4 font-semibold ${s.amountDue > 0 ? 'text-rose-600' : 'text-gray-400'}">${s.amountDue.toLocaleString()} ฿</td>
+            <td class="p-3 sm:p-4"><span class="px-2.5 py-0.5 rounded-full font-semibold text-xs ${badgeCls}">${escapeHtml(s.status)}</span>${qrHtml}</td>`;
+        tbody.appendChild(tr);
+    });
 }
 
-function closeSlipModal() {
-    const modal = document.getElementById('slip-modal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-    document.getElementById('slip-modal-img').src = '';
-    document.body.style.overflow = '';
-}
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSlipModal(); });
+// ============================================================
+// ADDITIONAL HELPER FUNCTIONS
+// ============================================================
 
 function switchView(view) {
     document.getElementById('user-view').classList.toggle('hidden', view !== 'user');
